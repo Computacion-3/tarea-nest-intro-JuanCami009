@@ -4,12 +4,15 @@ import { Repository } from 'typeorm';
 import { CreateRoleDto } from './dto/create-role.dto';
 import { UpdateRoleDto } from './dto/update-role.dto';
 import { Role } from './entities/role.entity';
+import { PermissionsService } from '../permissions/permissions.service';
+import { Permission } from 'src/permissions/entities/permission.entity';
 
 @Injectable()
 export class RolesService {
     constructor(
         @InjectRepository(Role)
         private readonly roleRepository: Repository<Role>,
+        private permissionsService: PermissionsService,
     ) {}
 
     async create(createRoleDto: CreateRoleDto): Promise<Role> {
@@ -18,19 +21,24 @@ export class RolesService {
     }
 
     async findAll(): Promise<Role[]> {
-        return await this.roleRepository.find();
+        return await this.roleRepository.find({
+            relations: ['permissions']
+        });
     }
 
     async findOne(id: number): Promise<Role | null> {
-        return await this.roleRepository.findOneBy({ id });
+        return await this.roleRepository.findOne({
+            where: { id },
+            relations: ['permissions']
+        });
     }
 
-    async update(
-        id: number,
-        updateRoleDto: UpdateRoleDto,
-    ): Promise<Role | null> {
+    async update(id: number, updateRoleDto: UpdateRoleDto,): Promise<Role | null> {
         await this.roleRepository.update(id, updateRoleDto);
-        return await this.roleRepository.findOneBy({ id });
+        return await this.roleRepository.findOne({
+            where: { id },
+            relations: ['permissions']
+        });
     }
 
     async remove(id: number): Promise<{ id: number } | null> {
@@ -42,6 +50,88 @@ export class RolesService {
     }
 
     async findByName(name: string): Promise<Role | null> {
-        return await this.roleRepository.findOneBy({ name });
+        return await this.roleRepository.findOne({
+            where: { name },
+            relations: ['permissions']
+        });
+    }
+
+    async assignPermissionToRole(roleId: number, permissionId: number): Promise<Role | null> {
+        const role = await this.roleRepository.findOne({
+            where: { id: roleId },
+            relations: ['permissions']
+        });
+        
+        if (!role) {
+            throw new Error('Role not found');
+        }
+
+        const permission = await this.permissionsService.findOne(permissionId);
+        if (!permission) {
+            throw new Error('Permission not found');
+        }
+
+        const hasPermission = role.permissions.some(p => p.id === permissionId);
+        if (hasPermission) {
+            throw new Error('Permission already assigned to role');
+        }
+
+        role.permissions.push(permission);
+        return await this.roleRepository.save(role);
+    }
+
+    async removePermissionFromRole(roleId: number, permissionId: number): Promise<Role | null> {
+        const role = await this.roleRepository.findOne({
+            where: { id: roleId },
+            relations: ['permissions']
+        });
+        
+        if (!role) {
+            throw new Error('Role not found');
+        }
+
+        role.permissions = role.permissions.filter(p => p.id !== permissionId);
+        return await this.roleRepository.save(role);
+    }
+
+    async assignMultiplePermissionsToRole(roleId: number, permissionIds: number[]): Promise<Role | null> {
+        const role = await this.roleRepository.findOne({
+            where: { id: roleId },
+            relations: ['permissions']
+        });
+        
+        if (!role) {
+            throw new Error('Role not found');
+        }
+
+        const permissions = await Promise.all(
+            permissionIds.map(id => this.permissionsService.findOne(id))
+        );
+
+        const validPermissions = permissions.filter(p => p !== null);
+        
+        if (validPermissions.length !== permissionIds.length) {
+            throw new Error('Some permissions were not found');
+        }
+
+        const newPermissions = validPermissions.filter(
+            newPerm => !role.permissions.some(existingPerm => existingPerm.id === newPerm.id)
+        );
+
+        role.permissions.push(...newPermissions);
+        return await this.roleRepository.save(role);
+    }
+
+    async getRolePermissions(id: number): Promise<Permission[]> {
+        const role = await this.roleRepository.findOne({
+            where: { id },
+            relations: ['permissions']
+        });
+        
+        if (!role) {
+            throw new Error('Role not found');
+        }
+
+        return role.permissions;
     }
 }
