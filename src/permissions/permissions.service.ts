@@ -21,11 +21,11 @@ export class PermissionsService {
     return await this.permissionsRepository.save(newPermission);
   }
 
-  async findAll() {
+  findAll() {
     return this.permissionsRepository.find();
   }
 
-  async findOne(id: number) {
+  findOne(id: number) {
     return this.permissionsRepository.findOne({ where: { id } });
   }
 

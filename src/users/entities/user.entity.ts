@@ -1,3 +1,4 @@
+import { Game } from 'src/games/entities/game.entity';
 import { Role } from 'src/roles/entities/role.entity';
 import {
     Entity,
@@ -6,6 +7,7 @@ import {
     CreateDateColumn,
     ManyToOne,
     JoinColumn,
+    OneToMany,
 } from 'typeorm';
 
 @Entity('users')
@@ -25,10 +27,13 @@ export class User {
     @Column({ nullable: true })
     bio: string;
 
-    @CreateDateColumn()
+    @CreateDateColumn({ default: new Date() })
     createdAt: Date;
 
     @ManyToOne(() => Role, (role) => role.users, { eager: true })
     @JoinColumn({ name: 'role_id' })
     role: Role;
+
+    @OneToMany(() => Game, (game) => game.createdBy)
+    games: Game[]
 }
